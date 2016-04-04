@@ -9,7 +9,6 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntity;
@@ -17,13 +16,13 @@ import com.lightbend.lagom.serialization.Jsonable;
 
 import akka.Done;
 import sample.chirper.friend.api.User;
+import sample.chirper.common.UserId;
 
 public interface FriendCommand extends Jsonable {
 
   @SuppressWarnings("serial")
   @Immutable
-  @JsonDeserialize
-  public final class CreateUser implements FriendCommand, PersistentEntity.ReplyType<Done> {
+  final class CreateUser implements FriendCommand, PersistentEntity.ReplyType<Done> {
     public final User user;
 
     @JsonCreator
@@ -58,8 +57,7 @@ public interface FriendCommand extends Jsonable {
 
   @SuppressWarnings("serial")
   @Immutable
-  @JsonDeserialize
-  public final class GetUser implements FriendCommand,PersistentEntity.ReplyType<GetUserReply> {
+  final class GetUser implements FriendCommand,PersistentEntity.ReplyType<GetUserReply> {
 
     @Override
     public boolean equals(@Nullable Object another) {
@@ -79,8 +77,7 @@ public interface FriendCommand extends Jsonable {
 
   @SuppressWarnings("serial")
   @Immutable
-  @JsonDeserialize
-  public final class GetUserReply implements Jsonable {
+  final class GetUserReply implements Jsonable {
     public final Optional<User> user;
 
     @JsonCreator
@@ -114,12 +111,11 @@ public interface FriendCommand extends Jsonable {
 
   @SuppressWarnings("serial")
   @Immutable
-  @JsonDeserialize
-  public final class AddFriend implements FriendCommand,PersistentEntity.ReplyType<Done> {
-    public final String friendUserId;
+  final class RequestAddFriend implements FriendCommand,PersistentEntity.ReplyType<Done> {
+    public final UserId friendUserId;
 
     @JsonCreator
-    public AddFriend(String friendUserId) {
+    public RequestAddFriend(UserId friendUserId) {
       this.friendUserId = Preconditions.checkNotNull(friendUserId, "friendUserId");
     }
     
@@ -127,10 +123,10 @@ public interface FriendCommand extends Jsonable {
     public boolean equals(@Nullable Object another) {
       if (this == another)
         return true;
-      return another instanceof AddFriend && equalTo((AddFriend) another);
+      return another instanceof RequestAddFriend && equalTo((RequestAddFriend) another);
     }
 
-    private boolean equalTo(AddFriend another) {
+    private boolean equalTo(RequestAddFriend another) {
       return friendUserId.equals(another.friendUserId);
     }
 
@@ -143,7 +139,75 @@ public interface FriendCommand extends Jsonable {
 
     @Override
     public String toString() {
-      return MoreObjects.toStringHelper("AddFriend").add("friendUserId", friendUserId).toString();
+      return MoreObjects.toStringHelper("RequestAddFriend").add("friendUserId", friendUserId).toString();
+    }
+  }
+
+  @SuppressWarnings("serial")
+  @Immutable
+  final class AcceptAddFriend implements FriendCommand,PersistentEntity.ReplyType<Done> {
+    public final UserId friendUserId;
+
+    @JsonCreator
+    public AcceptAddFriend(UserId friendUserId) {
+      this.friendUserId = Preconditions.checkNotNull(friendUserId, "friendUserId");
+    }
+
+    @Override
+    public boolean equals(@Nullable Object another) {
+      if (this == another)
+        return true;
+      return another instanceof AcceptAddFriend && equalTo((AcceptAddFriend) another);
+    }
+
+    private boolean equalTo(AcceptAddFriend another) {
+      return friendUserId.equals(another.friendUserId);
+    }
+
+    @Override
+    public int hashCode() {
+      int h = 31;
+      h = h * 17 + friendUserId.hashCode();
+      return h;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper("AcceptAddFriend").add("friendUserId", friendUserId).toString();
+    }
+  }
+
+  @SuppressWarnings("serial")
+  @Immutable
+  final class RejectAddFriend implements FriendCommand,PersistentEntity.ReplyType<Done> {
+    public final UserId friendUserId;
+
+    @JsonCreator
+    public RejectAddFriend(UserId friendUserId) {
+      this.friendUserId = Preconditions.checkNotNull(friendUserId, "friendUserId");
+    }
+
+    @Override
+    public boolean equals(@Nullable Object another) {
+      if (this == another)
+        return true;
+      return another instanceof RejectAddFriend && equalTo((RejectAddFriend) another);
+    }
+
+    private boolean equalTo(RejectAddFriend another) {
+      return friendUserId.equals(another.friendUserId);
+    }
+
+    @Override
+    public int hashCode() {
+      int h = 31;
+      h = h * 17 + friendUserId.hashCode();
+      return h;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper("RejectAddFriend").add("friendUserId", friendUserId).toString();
     }
   }
 

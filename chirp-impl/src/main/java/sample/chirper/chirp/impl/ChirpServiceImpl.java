@@ -34,6 +34,10 @@ import sample.chirper.chirp.api.Chirp;
 import sample.chirper.chirp.api.ChirpService;
 import sample.chirper.chirp.api.HistoricalChirpsRequest;
 import sample.chirper.chirp.api.LiveChirpsRequest;
+import sample.chirper.common.UserId;
+import sample.chirper.common.server.Authenticated;
+import sample.chirper.like.api.ChirpId;
+import sample.chirper.like.api.LikeService;
 
 public class ChirpServiceImpl implements ChirpService {
 
@@ -41,11 +45,13 @@ public class ChirpServiceImpl implements ChirpService {
   private final PubSubRegistry topics;
   private final CassandraSession db;
   private final ALogger log = Logger.of(getClass());
+  private final LikeService likeService;
 
   @Inject
-  public ChirpServiceImpl(PubSubRegistry topics, CassandraSession db) {
+  public ChirpServiceImpl(PubSubRegistry topics, CassandraSession db, LikeService likeService) {
     this.topics = topics;
     this.db = db;
+    this.likeService = likeService;
     createTable();
   }
 
@@ -64,21 +70,21 @@ public class ChirpServiceImpl implements ChirpService {
   }
 
   @Override
-  public ServiceCall<String, Chirp, NotUsed> addChirp() {
-    return (userId, chirp) -> {
+  public ServiceCall<UserId, Chirp, NotUsed> addChirp() {
+    return Authenticated.enforceUserId((userId, chirp) -> {
       if (!userId.equals(chirp.userId))
         throw new IllegalArgumentException("UserId " + userId + " did not match userId in " + chirp);
       PubSubRef<Chirp> topic = topics.refFor(TopicId.of(Chirp.class, topicQualifier(userId)));
       topic.publish(chirp);
       CompletionStage<NotUsed> result =
         db.executeWrite("INSERT INTO chirp (userId, uuid, timestamp, message) VALUES (?, ?, ?, ?)",
-          chirp.userId, chirp.uuid, chirp.timestamp.toEpochMilli(),
+          chirp.userId.userId, chirp.uuid, chirp.timestamp.toEpochMilli(),
           chirp.message).thenApply(done -> NotUsed.getInstance());
       return result;
-    };
+    });
   }
 
-  private String topicQualifier(String userId) {
+  private String topicQualifier(UserId userId) {
     return String.valueOf(Math.abs(userId.hashCode()) % MAX_TOPICS);
   }
 
@@ -87,17 +93,18 @@ public class ChirpServiceImpl implements ChirpService {
     return (id, req) -> {
       return recentChirps(req.userIds).thenApply(recentChirps -> {
         List<Source<Chirp, ?>> sources = new ArrayList<>();
-        for (String userId : req.userIds) {
+        for (UserId userId : req.userIds) {
           PubSubRef<Chirp> topic = topics.refFor(TopicId.of(Chirp.class, topicQualifier(userId)));
           sources.add(topic.subscriber());
         }
-        HashSet<String> users = new HashSet<>(req.userIds);
+        HashSet<UserId> users = new HashSet<>(req.userIds);
         Source<Chirp, ?> publishedChirps = Source.from(sources).flatMapMerge(sources.size(), s -> s)
           .filter(c -> users.contains(c.userId));
 
         // We currently ignore the fact that it is possible to get duplicate chirps
         // from the recent and the topic. That can be solved with a de-duplication stage.
-        return Source.from(recentChirps).concat(publishedChirps);
+        return Source.from(recentChirps).concat(publishedChirps)
+            .mapAsync(2, this::addLikesToChirp);
       });
     };
   }
@@ -106,7 +113,7 @@ public class ChirpServiceImpl implements ChirpService {
   public ServiceCall<NotUsed, HistoricalChirpsRequest, Source<Chirp, ?>> getHistoricalChirps() {
     return (id, req) -> {
       List<Source<Chirp, ?>> sources = new ArrayList<>();
-      for (String userId : req.userIds) {
+      for (UserId userId : req.userIds) {
           Source<Chirp, NotUsed> select = db
             .select("SELECT * FROM chirp WHERE userId = ? AND timestamp >= ? ORDER BY timestamp ASC", userId,
                 req.fromTime.toEpochMilli())
@@ -116,22 +123,23 @@ public class ChirpServiceImpl implements ChirpService {
         // Chirps from one user are ordered by timestamp, but chirps from different
         // users are not ordered. That can be improved by implementing a smarter
         // merge that takes the timestamps into account.
-      Source<Chirp, ?> result = Source.from(sources).flatMapMerge(sources.size(), s -> s);
+      Source<Chirp, ?> result = Source.from(sources).flatMapMerge(sources.size(), s -> s)
+        .mapAsync(2, this::addLikesToChirp);
       return CompletableFuture.completedFuture(result);
     };
   }
 
   private Chirp mapChirp(Row row) {
-    return new Chirp(row.getString("userId"), row.getString("message"), 
-        Optional.of(Instant.ofEpochMilli(row.getLong("timestamp"))), Optional.of(row.getString("uuid")));
+    return new Chirp(new UserId(row.getString("userId")), row.getString("message"),
+        Optional.of(Instant.ofEpochMilli(row.getLong("timestamp"))), Optional.of(row.getString("uuid")), 0);
   }
 
-  private CompletionStage<PSequence<Chirp>> recentChirps(PSequence<String> userIds) {
+  private CompletionStage<PSequence<Chirp>> recentChirps(PSequence<UserId> userIds) {
     int limit = 10;
     PSequence<CompletionStage<PSequence<Chirp>>> results = TreePVector.empty();
-    for (String userId : userIds) {
+    for (UserId userId : userIds) {
       CompletionStage<PSequence<Chirp>> result = db
-          .selectAll("SELECT * FROM chirp WHERE userId = ? ORDER BY timestamp DESC LIMIT ?", userId, limit)
+          .selectAll("SELECT * FROM chirp WHERE userId = ? ORDER BY timestamp DESC LIMIT ?", userId.userId, limit)
           .thenApply(rows -> {
             List<Chirp> chirps = rows.stream().map(this::mapChirp).collect(Collectors.toList());
             return TreePVector.from(chirps);
@@ -159,6 +167,11 @@ public class ChirpServiceImpl implements ChirpService {
     });
 
     return sortedLimited;
+  }
+
+  private CompletionStage<Chirp> addLikesToChirp(Chirp chirp) {
+    return likeService.getLikes().invoke(new ChirpId(chirp.userId, chirp.uuid), NotUsed.getInstance())
+        .thenApply(likers -> chirp.withLikes(likers.size()));
   }
 
 }

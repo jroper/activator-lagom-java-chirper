@@ -16,15 +16,25 @@ import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSideProces
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraSession;
 
 import akka.Done;
-import sample.chirper.friend.impl.FriendEvent.FriendAdded;
+import sample.chirper.friend.impl.FriendEvent.*;
 
 public class FriendEventProcessor extends CassandraReadSideProcessor<FriendEvent> {
 
+  private PreparedStatement addRequester = null; // initialized in prepare
+  private PreparedStatement deleteRequester = null; // initialized in prepare
   private PreparedStatement writeFollowers = null; // initialized in prepare
   private PreparedStatement writeOffset = null; // initialized in prepare
 
   private void setWriteFollowers(PreparedStatement writeFollowers) {
     this.writeFollowers = writeFollowers;
+  }
+
+  private void setAddRequester(PreparedStatement addRequester) {
+    this.addRequester = addRequester;
+  }
+
+  private void setDeleteRequester(PreparedStatement deleteRequester) {
+    this.deleteRequester = deleteRequester;
   }
 
   private void setWriteOffset(PreparedStatement writeOffset) {
@@ -41,9 +51,11 @@ public class FriendEventProcessor extends CassandraReadSideProcessor<FriendEvent
     // @formatter:off
     return
       prepareCreateTables(session).thenCompose(a ->
-      prepareWriteFollowers(session).thenCompose(b ->
-      prepareWriteOffset(session).thenCompose(c ->
-      selectOffset(session))));
+      prepareWriteFollowers(session)).thenCompose(a ->
+      prepareAddRequester(session)).thenCompose(a ->
+      prepareDeleteRequester(session)).thenCompose(a ->
+      prepareWriteOffset(session)).thenCompose(a ->
+      selectOffset(session));
     // @formatter:on
   }
 
@@ -54,6 +66,10 @@ public class FriendEventProcessor extends CassandraReadSideProcessor<FriendEvent
           + "userId text, followedBy text, "
           + "PRIMARY KEY (userId, followedBy))")
       .thenCompose(a -> session.executeCreateTable(
+        "CREATE TABLE IF NOT EXISTS requester ("
+          + "userId text, requestedBy text, "
+          + "PRIMARY KEY (userId, requestedBy))"))
+      .thenCompose(a -> session.executeCreateTable(
         "CREATE TABLE IF NOT EXISTS friend_offset ("
           + "partition int, offset timeuuid, "
           + "PRIMARY KEY (partition))"));
@@ -63,6 +79,20 @@ public class FriendEventProcessor extends CassandraReadSideProcessor<FriendEvent
   private CompletionStage<Done> prepareWriteFollowers(CassandraSession session) {
     return session.prepare("INSERT INTO follower (userId, followedBy) VALUES (?, ?)").thenApply(ps -> {
       setWriteFollowers(ps);
+      return Done.getInstance();
+    });
+  }
+
+  private CompletionStage<Done> prepareAddRequester(CassandraSession session) {
+    return session.prepare("INSERT INTO requester (userId, requestedBy) VALUES (?, ?)").thenApply(ps -> {
+      setAddRequester(ps);
+      return Done.getInstance();
+    });
+  }
+
+  private CompletionStage<Done> prepareDeleteRequester(CassandraSession session) {
+    return session.prepare("DELETE FROM requester WHERE userId = ? AND requestedBy = ?").thenApply(ps -> {
+      setDeleteRequester(ps);
       return Done.getInstance();
     });
   }
@@ -82,18 +112,40 @@ public class FriendEventProcessor extends CassandraReadSideProcessor<FriendEvent
 
   @Override
   public EventHandlers defineEventHandlers(EventHandlersBuilder builder) {
-    builder.setEventHandler(FriendAdded.class, this::processFriendChanged);
+    builder.setEventHandler(FriendAccepted.class, this::processFriendChanged);
+    builder.setEventHandler(FriendRequested.class, this::processRequestAdded);
+    builder.setEventHandler(FriendRejected.class, this::processRequestDeleted);
     return builder.build();
   }
 
-  private CompletionStage<List<BoundStatement>> processFriendChanged(FriendAdded event, UUID offset) {
+  private CompletionStage<List<BoundStatement>> processFriendChanged(FriendAccepted event, UUID offset) {
     BoundStatement bindWriteFollowers = writeFollowers.bind();
-    bindWriteFollowers.setString("userId", event.friendId);
-    bindWriteFollowers.setString("followedBy", event.userId);
+    bindWriteFollowers.setString("userId", event.friendId.getUserId());
+    bindWriteFollowers.setString("followedBy", event.userId.getUserId());
+
+    BoundStatement bindDeleteRequester = deleteRequester.bind();
+    bindDeleteRequester.setString("userId", event.friendId.getUserId());
+    bindDeleteRequester.setString("requestedBy", event.userId.getUserId());
+
     BoundStatement bindWriteOffset = writeOffset.bind(offset);
-    return completedStatements(Arrays.asList(bindWriteFollowers, bindWriteOffset));
+    return completedStatements(Arrays.asList(bindWriteFollowers, bindDeleteRequester, bindWriteOffset));
   }
 
+  private CompletionStage<List<BoundStatement>> processRequestAdded(FriendRequested event, UUID offset) {
+    BoundStatement bindAddRequester = addRequester.bind();
+    bindAddRequester.setString("userId", event.friendId.getUserId());
+    bindAddRequester.setString("requestedBy", event.userId.getUserId());
+    BoundStatement bindWriteOffset = writeOffset.bind(offset);
+    return completedStatements(Arrays.asList(bindAddRequester, bindWriteOffset));
+  }
+
+  private CompletionStage<List<BoundStatement>> processRequestDeleted(FriendRejected event, UUID offset) {
+    BoundStatement bindDeleteRequester = deleteRequester.bind();
+    bindDeleteRequester.setString("userId", event.friendId.getUserId());
+    bindDeleteRequester.setString("requestedBy", event.userId.getUserId());
+    BoundStatement bindWriteOffset = writeOffset.bind(offset);
+    return completedStatements(Arrays.asList(bindDeleteRequester, bindWriteOffset));
+  }
 
 
 }

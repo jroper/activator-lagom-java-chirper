@@ -21,11 +21,11 @@ import akka.Done;
 import akka.actor.ActorSystem;
 import akka.testkit.JavaTestKit;
 import sample.chirper.friend.api.User;
-import sample.chirper.friend.impl.FriendCommand.AddFriend;
+import sample.chirper.friend.impl.FriendCommand.RequestAddFriend;
 import sample.chirper.friend.impl.FriendCommand.CreateUser;
 import sample.chirper.friend.impl.FriendCommand.GetUser;
 import sample.chirper.friend.impl.FriendCommand.GetUserReply;
-import sample.chirper.friend.impl.FriendEvent.FriendAdded;
+import sample.chirper.friend.impl.FriendEvent.FriendAccepted;
 import sample.chirper.friend.impl.FriendEvent.UserCreated;
 
 
@@ -80,8 +80,8 @@ public class FriendEntityTest {
         new CreateUser(new User("alice", "Alice", Optional.of(friends))));
     assertEquals(Done.getInstance(), outcome.getReplies().get(0));
     assertEquals("alice", ((UserCreated) outcome.events().get(0)).userId);
-    assertEquals("bob", ((FriendAdded) outcome.events().get(1)).friendId);
-    assertEquals("peter", ((FriendAdded) outcome.events().get(2)).friendId);
+    assertEquals("bob", ((FriendAccepted) outcome.events().get(1)).friendId);
+    assertEquals("peter", ((FriendEvent.FriendAccepted) outcome.events().get(2)).friendId);
     assertEquals(Collections.emptyList(), driver.getAllIssues());
   }
 
@@ -91,10 +91,10 @@ public class FriendEntityTest {
         system, new FriendEntity(), "user-1");
     driver.run(new CreateUser(new User("alice", "Alice")));
 
-    Outcome<FriendEvent, FriendState> outcome = driver.run(new AddFriend("bob"), new AddFriend("peter"));
+    Outcome<FriendEvent, FriendState> outcome = driver.run(new RequestAddFriend("bob"), new FriendCommand.RequestAddFriend("peter"));
     assertEquals(Done.getInstance(), outcome.getReplies().get(0));
-    assertEquals("bob", ((FriendAdded) outcome.events().get(0)).friendId);
-    assertEquals("peter", ((FriendAdded) outcome.events().get(1)).friendId);
+    assertEquals("bob", ((FriendAccepted) outcome.events().get(0)).friendId);
+    assertEquals("peter", ((FriendEvent.FriendAccepted) outcome.events().get(1)).friendId);
     assertEquals(Collections.emptyList(), driver.getAllIssues());
   }
 
@@ -103,9 +103,9 @@ public class FriendEntityTest {
     PersistentEntityTestDriver<FriendCommand, FriendEvent, FriendState> driver = new PersistentEntityTestDriver<>(
         system, new FriendEntity(), "user-1");
     driver.run(new CreateUser(new User("alice", "Alice")));
-    driver.run(new AddFriend("bob"), new AddFriend("peter"));
+    driver.run(new RequestAddFriend("bob"), new RequestAddFriend("peter"));
 
-    Outcome<FriendEvent, FriendState> outcome = driver.run(new AddFriend("bob"));
+    Outcome<FriendEvent, FriendState> outcome = driver.run(new RequestAddFriend("bob"));
     assertEquals(Done.getInstance(), outcome.getReplies().get(0));
     assertEquals(Collections.emptyList(), outcome.events());
     assertEquals(Collections.emptyList(), driver.getAllIssues());

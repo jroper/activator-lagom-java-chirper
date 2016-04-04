@@ -8,33 +8,51 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
+import org.pcollections.HashTreePSet;
 import org.pcollections.PSequence;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.lightbend.lagom.serialization.Jsonable;
 
+import org.pcollections.PSet;
 import sample.chirper.friend.api.User;
+import sample.chirper.common.UserId;
 
 @SuppressWarnings("serial")
 @Immutable
-@JsonDeserialize
 public final class FriendState implements Jsonable {
 
   public final Optional<User> user;
+  public final PSet<UserId> friendRequests;
 
   @JsonCreator
-  public FriendState(Optional<User> user) {
+  public FriendState(Optional<User> user, PSet<UserId> friendRequests) {
     this.user = Preconditions.checkNotNull(user, "user");
+    this.friendRequests = friendRequests == null ? HashTreePSet.empty() : friendRequests;
   }
 
-  public FriendState addFriend(String friendUserId) {
+  public FriendState acceptFriendRequest(UserId friendUserId) {
     if (!user.isPresent())
       throw new IllegalStateException("friend can't be added before user is created");
-    PSequence<String> newFriends = user.get().friends.plus(friendUserId);
-    return new FriendState(Optional.of(new User(user.get().userId, user.get().name, Optional.of(newFriends))));
+    PSet<UserId> newRequests = friendRequests.minus(friendUserId);
+    PSequence<UserId> newFriends = user.get().friends.plus(friendUserId);
+    return new FriendState(Optional.of(new User(user.get().userId, user.get().name, Optional.of(newFriends))), newRequests);
+  }
+
+  public FriendState rejectFriendRequest(UserId friendUserId) {
+    if (!user.isPresent())
+      throw new IllegalStateException("friend can't be rejected before user is created");
+    PSet<UserId> newRequests = friendRequests.minus(friendUserId);
+    return new FriendState(user, newRequests);
+  }
+
+  public FriendState addFriendRequest(UserId friendUserId) {
+    if (!user.isPresent())
+      throw new IllegalStateException("friend request can't be added before user is created");
+    PSet<UserId> newRequests = friendRequests.plus(friendUserId);
+    return new FriendState(user, newRequests);
   }
 
   @Override

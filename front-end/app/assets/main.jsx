@@ -8,20 +8,33 @@ var Link = ReactRouter.Link;
 /**
  * Send a JSON message to the server.
  *
- * This method basically delegates to $.ajax, and so has the same semantics as that, however, before doing so it
+ * This method basically delegates to ajax, and so has the same semantics as that, however, before doing so it
  * converts params.data to a JSON string, and sets the content type to application/json.
  *
  * @params The params object, as per the jquery $.ajax method.
- * @returns The result of the $.ajax method (a promise).
+ * @returns The result of the ajax method (a promise).
  */
 function sendJson(params) {
     params.data = JSON.stringify(params.data);
     params.contentType = "application/json";
+    return ajax(params);
+}
+
+/**
+ * Like $.ajax, but adds the user token to the header so its authenticated.
+ */
+function ajax(params) {
+    if (!params.headers) {
+        params.headers = {};
+    }
+    if (localStorage.userId) {
+        params.headers["User-Token"] = localStorage.userId;
+    }
     return $.ajax(params);
 }
 
 function getUser(userId) {
-    return $.ajax({
+    return ajax({
         url: "/api/users/" + userId,
         type: "GET"
     }).then(
@@ -34,8 +47,90 @@ function getUser(userId) {
     );
 }
 
-var Chirp = React.createClass({
+var ChirpLikers = React.createClass({
+    getInitialState: function() {
+        return {
+            likers: []
+        };
+    },
+    likesUrl: function() {
+        return "/api/chirps/" + this.props.userId + "/" + this.props.chirpId + "/likes";
+    },
+    componentDidMount: function() {
+        ajax({
+            type: "GET",
+            url: this.likesUrl()
+        }).then(function(data) {
+            this.setState({likers: data});
+            this.props.likersCount(data.length);
+        }.bind(this));
+    },
+    like: function(evt) {
+        evt.preventDefault();
+        ajax({
+            type: "PUT",
+            url: this.likesUrl() + "/" + localStorage.userId
+        }).then(function() {
+            var newLikers = this.state.likers.concat([localStorage.userId]);
+            this.setState({likers: newLikers});
+            this.props.likersCount(newLikers.length);
+        }.bind(this));
+    },
+    unlike: function(evt) {
+        evt.preventDefault();
+        ajax({
+            type: "DELETE",
+            url: this.likesUrl() + "/" + localStorage.userId
+        }).then(function() {
+            var idx = this.state.likers.indexOf(localStorage.userId);
+            if (idx >= 0) {
+                var newLikers = this.state.likers.slice();
+                newLikers.splice(idx, 1);
+                this.setState({likers: newLikers});
+                this.props.likersCount(newLikers.length);
+            }
+        }.bind(this));
+    },
     render: function() {
+        var msg = "Like";
+        var action = this.like;
+        if (this.state.likers.indexOf(localStorage.userId) >= 0) {
+            msg = "Unlike";
+            action = this.unlike;
+        }
+        return (
+            <div className="likers">
+                <ul>
+                    {this.state.likers.map(function(liker) {
+                        return <li key={liker}>{liker}</li>
+                    })}
+                </ul>
+                <a href="#" className="btn" onClick={action}>{msg}</a>
+            </div>
+        );
+    }
+});
+
+var Chirp = React.createClass({
+    getInitialState: function() {
+        return {
+            likes: this.props.likes,
+            displayLikers: false
+        };
+    },
+    toggleDisplayLikers: function(evt) {
+        evt.preventDefault();
+        this.setState({displayLikers: !this.state.displayLikers});
+    },
+    likersCount: function(likes) {
+        this.setState({likes: likes})
+    },
+    render: function() {
+        var likers;
+        if (this.state.displayLikers) {
+            likers = <ChirpLikers userId={this.props.userId} chirpId={this.props.chirpId}
+                likersCount={this.likersCount} />
+        }
         return (
             <div className="chirp">
                 <h3 className="chirpUser">
@@ -44,6 +139,10 @@ var Chirp = React.createClass({
                     </Link>
                 </h3>
                 {this.props.children}
+                <a href="#" className="likes" onClick={this.toggleDisplayLikers}>
+                    {this.state.likes} likes
+                </a>
+                {likers}
                 <hr />
             </div>
         );
@@ -51,7 +150,7 @@ var Chirp = React.createClass({
 });
 
 function createUserStream(userId) {
-    return createStream("/api/chirps/live", function(stream) {
+    return createStream("/api/chirpstream/live", function(stream) {
         stream.send(JSON.stringify({userIds: [userId]}));
     });
 }
@@ -122,7 +221,8 @@ var ChirpStream = React.createClass({
                 userName = chirp.userId;
             }
             return (
-                <Chirp userId={chirp.userId} userName={userName} key={chirp.uuid}>
+                <Chirp userId={chirp.userId} userName={userName} chirpId={chirp.uuid}
+                       key={chirp.uuid} likes={chirp.likes}>
                     {chirp.message}
                 </Chirp>
             );
@@ -151,7 +251,7 @@ var ChirpForm = React.createClass({
             return;
         }
         sendJson({
-            url: "/api/chirps/live/" + localStorage.userId,
+            url: "/api/chirps/" + localStorage.userId,
             type: 'POST',
             data: {
                 userId: localStorage.userId,
@@ -193,15 +293,12 @@ var AddFriendPage = React.createClass({
         if (!friendId) {
             return;
         }
-        // First, validate that the friend exsits
+        // First, validate that the friend exists
         getUser(friendId).then(function(friend) {
             if (friend) {
                 sendJson({
-                    url: "/api/users/" + localStorage.userId + "/friends",
-                    type: 'POST',
-                    data: {
-                        friendId: friendId
-                    },
+                    url: "/api/users/" + localStorage.userId + "/requests/" + friendId,
+                    type: 'PUT',
                     success: function() {
                         this.setState({friendId: ""});
                         this.props.history.pushState(null, "/");
@@ -238,6 +335,80 @@ var AddFriendPage = React.createClass({
                 </Section>
             </ContentLayout>
         );
+    }
+});
+
+var FriendRequest = React.createClass({
+    getInitialState: function() {
+        return {name: this.props.requester};
+    },
+    componentDidMount: function() {
+        getUser(this.props.requester).then(function(user) {
+            this.setState({name: user.name});
+        }.bind(this));
+    },
+    accept: function() {
+        ajax({
+            type: "PUT",
+            url: "/api/users/" + this.props.requester + "/friends/" + localStorage.userId
+        }).then(this.props.remove);
+    },
+    reject: function() {
+        ajax({
+            type: "DELETE",
+            url: "/api/users/" + this.props.requester + "/requests/" + localStorage.userId
+        }).then(this.props.remove);
+    },
+    render: function() {
+        return (
+            <div className="row">
+                <div className="small-8 large-4 columns">
+                    {this.state.name}
+                </div>
+                <div className="small-4 large-4 columns">
+                    <a className="btn" href="#" onClick={this.accept}>Accept</a>
+                    <a className="btn" href="#" onClick={this.reject}>Reject</a>
+                </div>
+            </div>
+        );
+    }
+
+});
+
+var FriendRequestsPage = React.createClass({
+    getInitialState: function() {
+        return {requesters: []};
+    },
+    componentDidMount: function() {
+        ajax({
+            type: "GET",
+            url: "/api/users/" + localStorage.userId + "/requesters"
+        }).then(function(requesters) {
+            this.setState({requesters: requesters});
+        }.bind(this), function(error) {
+            console.log("Error retrieving requesters", error);
+        }.bind(this));
+    },
+    remove: function(requester) {
+        var i = this.state.requesters.indexOf(requester);
+        if (i >= 0) {
+            this.setState(this.state.requesters.splice(i, 1));
+        }
+    },
+    render: function() {
+        return (
+            <ContentLayout subtitle="Friend Requests">
+                <Section>
+                    <div className="small-12 columns">
+                        {this.state.requesters.map(function(requester) {
+                            return <FriendRequest requester={requester} key={requester} remove={function() {
+                                this.remove(requester);
+                            }.bind(this)}/>
+                        }.bind(this))}
+                    </div>
+                </Section>
+            </ContentLayout>
+        )
     }
 });
 
@@ -382,7 +553,7 @@ var SignUpPage = React.createClass({
                 localStorage.userId = userId;
                 this.props.history.pushState(null, "/");
             }.bind(this), function() {
-                this.setState("User " + userId + " already exists.");
+                this.setState({error: "User " + userId + " already exists."});
             }.bind(this));
         }
     },
@@ -449,6 +620,7 @@ var PageLayout = React.createClass({
         if (this.props.user) {
             links = (
                 <div className="tertiary-nav">
+                    <Link to="/friendRequests">Friend Requests</Link>,
                     <Link to="/addFriend">Add Friend</Link>,
                     <Link to="/">Feed</Link>,
                     <Link to={"/users/" + this.props.user.userId }>{this.props.user.name}</Link>
@@ -559,6 +731,7 @@ ReactDOM.render(
             <IndexRoute component={ActivityStream}/>
             <Route path="/users/:userId" component={UserChirps}/>
             <Route path="/addFriend" component={AddFriendPage}/>
+            <Route path="/friendRequests" component={FriendRequestsPage}/>
         </Route>
     </ReactRouter.Router>,
     document.getElementById("content")

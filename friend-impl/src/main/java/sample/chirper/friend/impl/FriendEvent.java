@@ -10,34 +10,33 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.lightbend.lagom.javadsl.persistence.AggregateEvent;
 import com.lightbend.lagom.javadsl.persistence.AggregateEventTag;
 import com.lightbend.lagom.serialization.Jsonable;
+import sample.chirper.common.UserId;
 
 public interface FriendEvent extends Jsonable, AggregateEvent<FriendEvent> {
 
   @Override
-  default public AggregateEventTag<FriendEvent> aggregateTag() {
+  default AggregateEventTag<FriendEvent> aggregateTag() {
     return FriendEventTag.INSTANCE;
   }
 
   @SuppressWarnings("serial")
   @Immutable
-  @JsonDeserialize
-  public class UserCreated implements FriendEvent {
-    public final String userId;
+  final class UserCreated implements FriendEvent {
+    public final UserId userId;
     public final String name;
     public final Instant timestamp;
 
-    public UserCreated(String userId, String name) {
+    public UserCreated(UserId userId, String name) {
       this(userId, name, Optional.empty());
     }
 
     @JsonCreator
-    private UserCreated(String userId, String name, Optional<Instant> timestamp) {
+    private UserCreated(UserId userId, String name, Optional<Instant> timestamp) {
       this.userId = Preconditions.checkNotNull(userId, "userId");
       this.name = Preconditions.checkNotNull(name, "name");
       this.timestamp = timestamp.orElseGet(() -> Instant.now());
@@ -72,18 +71,17 @@ public interface FriendEvent extends Jsonable, AggregateEvent<FriendEvent> {
 
   @SuppressWarnings("serial")
   @Immutable
-  @JsonDeserialize
-  public class FriendAdded implements FriendEvent {
-    public final String userId;
-    public final String friendId;
+  final class FriendAccepted implements FriendEvent {
+    public final UserId userId;
+    public final UserId friendId;
     public final Instant timestamp;
 
-    public FriendAdded(String userId, String friendId) {
+    public FriendAccepted(UserId userId, UserId friendId) {
       this(userId, friendId, Optional.empty());
     }
 
     @JsonCreator
-    public FriendAdded(String userId, String friendId, Optional<Instant> timestamp) {
+    public FriendAccepted(UserId userId, UserId friendId, Optional<Instant> timestamp) {
       this.userId = Preconditions.checkNotNull(userId, "userId");
       this.friendId = Preconditions.checkNotNull(friendId, "friendId");
       this.timestamp = timestamp.orElseGet(() -> Instant.now());
@@ -93,10 +91,10 @@ public interface FriendEvent extends Jsonable, AggregateEvent<FriendEvent> {
     public boolean equals(@Nullable Object another) {
       if (this == another)
         return true;
-      return another instanceof FriendAdded && equalTo((FriendAdded) another);
+      return another instanceof FriendAccepted && equalTo((FriendAccepted) another);
     }
 
-    private boolean equalTo(FriendAdded another) {
+    private boolean equalTo(FriendAccepted another) {
       return userId.equals(another.userId) && friendId.equals(another.friendId) && timestamp.equals(another.timestamp);
     }
 
@@ -111,8 +109,98 @@ public interface FriendEvent extends Jsonable, AggregateEvent<FriendEvent> {
 
     @Override
     public String toString() {
-      return MoreObjects.toStringHelper("FriendAdded").add("userId", userId).add("friendId", friendId)
+      return MoreObjects.toStringHelper("FriendAccepted").add("userId", userId).add("friendId", friendId)
           .add("timestamp", timestamp).toString();
+    }
+  }
+
+  @SuppressWarnings("serial")
+  @Immutable
+  final class FriendRejected implements FriendEvent {
+    public final UserId userId;
+    public final UserId friendId;
+    public final Instant timestamp;
+
+    public FriendRejected(UserId userId, UserId friendId) {
+      this(userId, friendId, Optional.empty());
+    }
+
+    @JsonCreator
+    public FriendRejected(UserId userId, UserId friendId, Optional<Instant> timestamp) {
+      this.userId = Preconditions.checkNotNull(userId, "userId");
+      this.friendId = Preconditions.checkNotNull(friendId, "friendId");
+      this.timestamp = timestamp.orElseGet(() -> Instant.now());
+    }
+
+    @Override
+    public boolean equals(@Nullable Object another) {
+      if (this == another)
+        return true;
+      return another instanceof FriendRejected && equalTo((FriendRejected) another);
+    }
+
+    private boolean equalTo(FriendRejected another) {
+      return userId.equals(another.userId) && friendId.equals(another.friendId) && timestamp.equals(another.timestamp);
+    }
+
+    @Override
+    public int hashCode() {
+      int h = 31;
+      h = h * 17 + userId.hashCode();
+      h = h * 17 + friendId.hashCode();
+      h = h * 17 + timestamp.hashCode();
+      return h;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper("FriendRejected").add("userId", userId).add("friendId", friendId)
+              .add("timestamp", timestamp).toString();
+    }
+  }
+
+  @SuppressWarnings("serial")
+  @Immutable
+  final class FriendRequested implements FriendEvent {
+    public final UserId userId;
+    public final UserId friendId;
+    public final Instant timestamp;
+
+    public FriendRequested(UserId userId, UserId friendId) {
+      this(userId, friendId, Optional.empty());
+    }
+
+    @JsonCreator
+    public FriendRequested(UserId userId, UserId friendId, Optional<Instant> timestamp) {
+      this.userId = Preconditions.checkNotNull(userId, "userId");
+      this.friendId = Preconditions.checkNotNull(friendId, "friendId");
+      this.timestamp = timestamp.orElseGet(() -> Instant.now());
+    }
+
+    @Override
+    public boolean equals(@Nullable Object another) {
+      if (this == another)
+        return true;
+      return another instanceof FriendRequested && equalTo((FriendRequested) another);
+    }
+
+    private boolean equalTo(FriendRequested another) {
+      return userId.equals(another.userId) && friendId.equals(another.friendId) && timestamp.equals(another.timestamp);
+    }
+
+    @Override
+    public int hashCode() {
+      int h = 31;
+      h = h * 17 + userId.hashCode();
+      h = h * 17 + friendId.hashCode();
+      h = h * 17 + timestamp.hashCode();
+      return h;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper("FriendAccepted").add("userId", userId).add("friendId", friendId)
+              .add("timestamp", timestamp).toString();
     }
   }
 
