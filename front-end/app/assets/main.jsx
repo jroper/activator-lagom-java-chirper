@@ -297,7 +297,7 @@ var AddFriendPage = React.createClass({
         getUser(friendId).then(function(friend) {
             if (friend) {
                 sendJson({
-                    url: "/api/users/" + localStorage.userId + "/requests/" + friendId,
+                    url: "/api/users/" + localStorage.userId + "/friends/" + friendId,
                     type: 'PUT',
                     success: function() {
                         this.setState({friendId: ""});
@@ -335,80 +335,6 @@ var AddFriendPage = React.createClass({
                 </Section>
             </ContentLayout>
         );
-    }
-});
-
-var FriendRequest = React.createClass({
-    getInitialState: function() {
-        return {name: this.props.requester};
-    },
-    componentDidMount: function() {
-        getUser(this.props.requester).then(function(user) {
-            this.setState({name: user.name});
-        }.bind(this));
-    },
-    accept: function() {
-        ajax({
-            type: "PUT",
-            url: "/api/users/" + this.props.requester + "/friends/" + localStorage.userId
-        }).then(this.props.remove);
-    },
-    reject: function() {
-        ajax({
-            type: "DELETE",
-            url: "/api/users/" + this.props.requester + "/requests/" + localStorage.userId
-        }).then(this.props.remove);
-    },
-    render: function() {
-        return (
-            <div className="row">
-                <div className="small-8 large-4 columns">
-                    {this.state.name}
-                </div>
-                <div className="small-4 large-4 columns">
-                    <a className="btn" href="#" onClick={this.accept}>Accept</a>
-                    <a className="btn" href="#" onClick={this.reject}>Reject</a>
-                </div>
-            </div>
-        );
-    }
-
-});
-
-var FriendRequestsPage = React.createClass({
-    getInitialState: function() {
-        return {requesters: []};
-    },
-    componentDidMount: function() {
-        ajax({
-            type: "GET",
-            url: "/api/users/" + localStorage.userId + "/requesters"
-        }).then(function(requesters) {
-            this.setState({requesters: requesters});
-        }.bind(this), function(error) {
-            console.log("Error retrieving requesters", error);
-        }.bind(this));
-    },
-    remove: function(requester) {
-        var i = this.state.requesters.indexOf(requester);
-        if (i >= 0) {
-            this.setState(this.state.requesters.splice(i, 1));
-        }
-    },
-    render: function() {
-        return (
-            <ContentLayout subtitle="Friend Requests">
-                <Section>
-                    <div className="small-12 columns">
-                        {this.state.requesters.map(function(requester) {
-                            return <FriendRequest requester={requester} key={requester} remove={function() {
-                                this.remove(requester);
-                            }.bind(this)}/>
-                        }.bind(this))}
-                    </div>
-                </Section>
-            </ContentLayout>
-        )
     }
 });
 
@@ -694,6 +620,7 @@ var App = React.createClass({
         }
     },
     handleLogin: function(user) {
+        localStorage.user = user;
         this.setState({user: user});
     },
     logout: function(e) {
@@ -731,7 +658,6 @@ ReactDOM.render(
             <IndexRoute component={ActivityStream}/>
             <Route path="/users/:userId" component={UserChirps}/>
             <Route path="/addFriend" component={AddFriendPage}/>
-            <Route path="/friendRequests" component={FriendRequestsPage}/>
         </Route>
     </ReactRouter.Router>,
     document.getElementById("content")

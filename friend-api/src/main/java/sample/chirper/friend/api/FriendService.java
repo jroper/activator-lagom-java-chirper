@@ -38,19 +38,9 @@ public interface FriendService extends Service {
   ServiceCall<NotUsed, User, NotUsed> createUser();
 
   /**
-   * Service call for requesting a friend.
+   * Service call for adding a friend.
    */
-  ServiceCall<FriendRequest, NotUsed, NotUsed> addFriendRequest();
-
-  /**
-   * Service call for accepting a friend request.
-   */
-  ServiceCall<FriendRequest, NotUsed, NotUsed> acceptFriendRequest();
-
-  /**
-   * Service call for rejecting a friend request.
-   */
-  ServiceCall<FriendRequest, NotUsed, NotUsed> rejectFriendRequest();
+  ServiceCall<FriendRequest, NotUsed, NotUsed> addFriend();
 
   /**
    * Service call for getting the followers of a user.
@@ -60,25 +50,14 @@ public interface FriendService extends Service {
    */
   ServiceCall<UserId, NotUsed, PSequence<UserId>> getFollowers();
 
-  /**
-   * Get the friend requests for a user.
-   *
-   * The ID for this service call is the Id of the user to get the friend requests for.
-   * The response message is the list of friend request user IDs.
-   */
-  ServiceCall<UserId, NotUsed, PSequence<UserId>> getFriendRequests();
-
   @Override
   default Descriptor descriptor() {
     // @formatter:off
     return named("friendservice").with(
         restCall(Method.GET,    "/api/users/:id", getUser()),
         restCall(Method.POST,   "/api/users", createUser()),
-        restCall(Method.PUT,    "/api/users/:userId/requests/:friendId", addFriendRequest()),
-        restCall(Method.PUT,    "/api/users/:userId/friends/:friendId", acceptFriendRequest()),
-        restCall(Method.DELETE, "/api/users/:userId/requests/:friendId", rejectFriendRequest()),
-        restCall(Method.GET,    "/api/users/:id/followers", getFollowers()),
-        restCall(Method.GET,    "/api/users/:id/requesters", getFriendRequests())
+        restCall(Method.PUT,    "/api/users/:userId/friends/:friendId", addFriend()),
+        restCall(Method.GET,    "/api/users/:id/followers", getFollowers())
       ).withAutoAcl(true).with(UserId.class,
             IdSerializers.create("UserId", UserId::new, UserId::getUserId))
         .with(FriendRequest.class,

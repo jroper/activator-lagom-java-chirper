@@ -64,32 +64,12 @@ public class FriendServiceImpl implements FriendService {
   }
 
   @Override
-  public ServiceCall<FriendRequest, NotUsed, NotUsed> addFriendRequest() {
+  public ServiceCall<FriendRequest, NotUsed, NotUsed> addFriend() {
     return Authenticated.enforceUserId(FriendRequest::getUserId,
         (friendRequest, notUsed) ->
           friendEntityRef(friendRequest.userId)
-              .ask(new RequestAddFriend(friendRequest.friendId))
+              .ask(new AddFriend(friendRequest.friendId))
               .thenApply(ack -> NotUsed.getInstance())
-    );
-  }
-
-  @Override
-  public ServiceCall<FriendRequest, NotUsed, NotUsed> acceptFriendRequest() {
-    return Authenticated.enforceUserId(FriendRequest::getFriendId,
-      (friendRequest, notUsed) ->
-        friendEntityRef(friendRequest.userId)
-            .ask(new AcceptAddFriend(friendRequest.friendId))
-            .thenApply(ack -> NotUsed.getInstance())
-    );
-  }
-
-  @Override
-  public ServiceCall<FriendRequest, NotUsed, NotUsed> rejectFriendRequest() {
-    return Authenticated.enforceUserId(FriendRequest::getFriendId,
-      (friendRequest, notUsed) ->
-        friendEntityRef(friendRequest.userId)
-            .ask(new RejectAddFriend(friendRequest.friendId))
-            .thenApply(ack -> NotUsed.getInstance())
     );
   }
 
@@ -103,18 +83,6 @@ public class FriendServiceImpl implements FriendService {
       });
       return result;
     };
-  }
-
-  @Override
-  public ServiceCall<UserId, NotUsed, PSequence<UserId>> getFriendRequests() {
-    return Authenticated.enforceUserId((userId, req) -> {
-      CompletionStage<PSequence<UserId>> result = db.selectAll("SELECT * FROM requester WHERE userId = ?", userId.userId)
-          .thenApply(rows -> {
-            List<UserId> requesters = rows.stream().map(row -> new UserId(row.getString("requestedBy"))).collect(Collectors.toList());
-            return TreePVector.from(requesters);
-          });
-      return result;
-    });
   }
 
   private PersistentEntityRef<FriendCommand> friendEntityRef(UserId userId) {

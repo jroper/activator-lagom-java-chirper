@@ -93,14 +93,11 @@ public class LoadTestServiceImpl implements LoadTestService {
     final AtomicLong chirpCount = new AtomicLong();
     Source<String, ?> addedFriends = friendPairs.mapAsyncUnordered(params.parallelism, pair -> {
       FriendRequest request = new FriendRequest(new UserId(userIdPrefix + pair.first()), new UserId(userIdPrefix + pair.second()));
-      CompletionStage<NotUsed> requested = friendService.addFriendRequest().invoke(request, NotUsed.getInstance());
-      CompletionStage<NotUsed> accepted = requested.thenCompose(a ->
-        friendService.acceptFriendRequest().invoke(request, NotUsed.getInstance())
-      );
+      CompletionStage<NotUsed> added = friendService.addFriend().invoke(request, NotUsed.getInstance());
       // start clients when last friend association has been created
       if (params.users == pair.first() && (params.users + params.friends) == pair.second())
-        accepted.thenAccept(a -> startClients(params.clients, userIdPrefix, chirpCount, runSeqNr));
-      return accepted;
+        added.thenAccept(a -> startClients(params.clients, userIdPrefix, chirpCount, runSeqNr));
+      return added;
     }).via(summary("added friends"));
 
     Source<Integer, ?> chirpNumbers = Source.range(1, params.chirps);

@@ -25,34 +25,17 @@ import sample.chirper.common.UserId;
 public final class FriendState implements Jsonable {
 
   public final Optional<User> user;
-  public final PSet<UserId> friendRequests;
 
   @JsonCreator
-  public FriendState(Optional<User> user, PSet<UserId> friendRequests) {
+  public FriendState(Optional<User> user) {
     this.user = Preconditions.checkNotNull(user, "user");
-    this.friendRequests = friendRequests == null ? HashTreePSet.empty() : friendRequests;
   }
 
-  public FriendState acceptFriendRequest(UserId friendUserId) {
+  public FriendState addFriend(UserId friendUserId) {
     if (!user.isPresent())
       throw new IllegalStateException("friend can't be added before user is created");
-    PSet<UserId> newRequests = friendRequests.minus(friendUserId);
     PSequence<UserId> newFriends = user.get().friends.plus(friendUserId);
-    return new FriendState(Optional.of(new User(user.get().userId, user.get().name, Optional.of(newFriends))), newRequests);
-  }
-
-  public FriendState rejectFriendRequest(UserId friendUserId) {
-    if (!user.isPresent())
-      throw new IllegalStateException("friend can't be rejected before user is created");
-    PSet<UserId> newRequests = friendRequests.minus(friendUserId);
-    return new FriendState(user, newRequests);
-  }
-
-  public FriendState addFriendRequest(UserId friendUserId) {
-    if (!user.isPresent())
-      throw new IllegalStateException("friend request can't be added before user is created");
-    PSet<UserId> newRequests = friendRequests.plus(friendUserId);
-    return new FriendState(user, newRequests);
+    return new FriendState(Optional.of(new User(user.get().userId, user.get().name, Optional.of(newFriends))));
   }
 
   @Override

@@ -25,7 +25,7 @@ import sample.chirper.friend.impl.FriendCommand.RequestAddFriend;
 import sample.chirper.friend.impl.FriendCommand.CreateUser;
 import sample.chirper.friend.impl.FriendCommand.GetUser;
 import sample.chirper.friend.impl.FriendCommand.GetUserReply;
-import sample.chirper.friend.impl.FriendEvent.FriendAccepted;
+import sample.chirper.friend.impl.FriendEvent.FriendAdded;
 import sample.chirper.friend.impl.FriendEvent.UserCreated;
 
 
@@ -80,8 +80,8 @@ public class FriendEntityTest {
         new CreateUser(new User("alice", "Alice", Optional.of(friends))));
     assertEquals(Done.getInstance(), outcome.getReplies().get(0));
     assertEquals("alice", ((UserCreated) outcome.events().get(0)).userId);
-    assertEquals("bob", ((FriendAccepted) outcome.events().get(1)).friendId);
-    assertEquals("peter", ((FriendEvent.FriendAccepted) outcome.events().get(2)).friendId);
+    assertEquals("bob", ((FriendAdded) outcome.events().get(1)).friendId);
+    assertEquals("peter", ((FriendAdded) outcome.events().get(2)).friendId);
     assertEquals(Collections.emptyList(), driver.getAllIssues());
   }
 
@@ -93,8 +93,8 @@ public class FriendEntityTest {
 
     Outcome<FriendEvent, FriendState> outcome = driver.run(new RequestAddFriend("bob"), new FriendCommand.RequestAddFriend("peter"));
     assertEquals(Done.getInstance(), outcome.getReplies().get(0));
-    assertEquals("bob", ((FriendAccepted) outcome.events().get(0)).friendId);
-    assertEquals("peter", ((FriendEvent.FriendAccepted) outcome.events().get(1)).friendId);
+    assertEquals("bob", ((FriendAdded) outcome.events().get(0)).friendId);
+    assertEquals("peter", ((FriendAdded) outcome.events().get(1)).friendId);
     assertEquals(Collections.emptyList(), driver.getAllIssues());
   }
 
