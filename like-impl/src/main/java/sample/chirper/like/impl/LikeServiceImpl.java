@@ -1,16 +1,18 @@
 package sample.chirper.like.impl;
 
 import akka.NotUsed;
+import akka.stream.javadsl.Source;
 import com.lightbend.lagom.javadsl.api.ServiceCall;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRef;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRegistry;
 import org.pcollections.PCollection;
 import sample.chirper.common.UserId;
-import sample.chirper.like.api.ChirpId;
-import sample.chirper.like.api.LikeChirp;
-import sample.chirper.like.api.LikeService;
+import sample.chirper.like.api.*;
 
 import javax.inject.Inject;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class LikeServiceImpl implements LikeService {
 
@@ -42,6 +44,17 @@ public class LikeServiceImpl implements LikeService {
   public ServiceCall<ChirpId, NotUsed, PCollection<UserId>> getLikes() {
     return (chirpId, request) ->
         likeEntityRef(chirpId).ask(new LikeCommand.GetLikes());
+  }
+
+  @Override
+  public ServiceCall<Optional<UUID>, NotUsed, Source<Likes, NotUsed>> counts() {
+    return (offset, request) ->
+        CompletableFuture.completedFuture(persistentEntities.eventStream(LikeEventTag.INSTANCE, offset)
+            .mapAsync(2, event ->
+              persistentEntities.refFor(LikeEntity.class, event.first().chirpId())
+                .ask(new LikeCommand.GetLikes())
+                .thenApply(likers -> new Likes(event.first().chirpId(), likers.size(), event.second()))
+        ));
   }
 
   private PersistentEntityRef<LikeCommand> likeEntityRef(ChirpId chirpId) {

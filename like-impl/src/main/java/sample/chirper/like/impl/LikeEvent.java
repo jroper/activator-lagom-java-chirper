@@ -1,11 +1,20 @@
 package sample.chirper.like.impl;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.lightbend.lagom.javadsl.persistence.AggregateEvent;
+import com.lightbend.lagom.javadsl.persistence.AggregateEventTag;
 import com.lightbend.lagom.serialization.Jsonable;
 import jdk.nashorn.internal.ir.annotations.Immutable;
 import sample.chirper.common.UserId;
 
-public interface LikeEvent extends Jsonable {
+public interface LikeEvent extends Jsonable, AggregateEvent<LikeEvent> {
+
+  @Override
+  default AggregateEventTag<LikeEvent> aggregateTag() {
+    return LikeEventTag.INSTANCE;
+  }
+
+  String chirpId();
 
   @Immutable
   final class Liked implements LikeEvent {
@@ -16,6 +25,10 @@ public interface LikeEvent extends Jsonable {
     public Liked(String chirpId, UserId userId) {
       this.chirpId = chirpId;
       this.userId = userId;
+    }
+
+    public String chirpId() {
+      return chirpId;
     }
 
     @Override
@@ -55,6 +68,10 @@ public interface LikeEvent extends Jsonable {
     public UnLiked(String chirpId, UserId userId) {
       this.chirpId = chirpId;
       this.userId = userId;
+    }
+
+    public String chirpId() {
+      return chirpId;
     }
 
     @Override
