@@ -49,26 +49,7 @@ public class ChirpModule extends AbstractModule implements ServiceGuiceSupport, 
     }
 
     public ActorRef get() {
-      Props likeCountSubscriberProps = Props.create(LikeCountSubscriber.class, likeCountSubscriber::get);
-
-      // Backoff supervisor ensures the connection is maintained without hammering the service when
-      // it fails.
-      Props backoffSupervisor = BackoffSupervisor.props(
-          Backoff.onFailure(
-              likeCountSubscriberProps,
-              "likeCountSubscriber",
-              Duration.create(3, TimeUnit.SECONDS),
-              Duration.create(30, TimeUnit.SECONDS),
-              0.2
-          )
-      );
-
-      // Use cluster singleton to ensure it only runs on one node
-      ClusterSingletonManagerSettings settings = ClusterSingletonManagerSettings.create(actorSystem);
-      return actorSystem.actorOf(
-          ClusterSingletonManager.props(backoffSupervisor, PoisonPill.getInstance(), settings),
-          "likeCountSubscriberSingleton"
-      );
+      return null;
     }
   }
 }

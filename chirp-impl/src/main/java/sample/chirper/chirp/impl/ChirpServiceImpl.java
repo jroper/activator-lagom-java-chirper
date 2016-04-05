@@ -23,8 +23,6 @@ import com.lightbend.lagom.javadsl.pubsub.TopicId;
 
 import akka.NotUsed;
 import akka.stream.javadsl.Source;
-import play.Logger;
-import play.Logger.ALogger;
 import sample.chirper.chirp.api.Chirp;
 import sample.chirper.chirp.api.ChirpService;
 import sample.chirper.chirp.api.HistoricalChirpsRequest;
@@ -78,7 +76,8 @@ public class ChirpServiceImpl implements ChirpService {
 
         // We currently ignore the fact that it is possible to get duplicate chirps
         // from the recent and the topic. That can be solved with a de-duplication stage.
-        return Source.from(recentChirps).concat(publishedChirps);
+        return Source.from(recentChirps).concat(publishedChirps)
+            .mapAsync(2, this::updateChirpLikes);
       });
     };
   }
@@ -94,7 +93,8 @@ public class ChirpServiceImpl implements ChirpService {
         // Chirps from one user are ordered by timestamp, but chirps from different
         // users are not ordered. That can be improved by implementing a smarter
         // merge that takes the timestamps into account.
-      Source<Chirp, ?> result = Source.from(sources).flatMapMerge(sources.size(), s -> s);
+      Source<Chirp, ?> result = Source.from(sources).flatMapMerge(sources.size(), s -> s)
+        .mapAsync(2, this::updateChirpLikes);
       return CompletableFuture.completedFuture(result);
     };
   }
@@ -127,5 +127,11 @@ public class ChirpServiceImpl implements ChirpService {
     });
 
     return sortedLimited;
+  }
+
+  private CompletionStage<Chirp> updateChirpLikes(Chirp chirp) {
+    return likeService.getLikes()
+        .invoke(new ChirpId(chirp.userId, chirp.uuid), NotUsed.getInstance())
+        .thenApply(likers -> chirp.withLikes(likers.size()));
   }
 }

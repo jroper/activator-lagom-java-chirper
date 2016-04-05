@@ -48,13 +48,10 @@ public class LikeServiceImpl implements LikeService {
 
   @Override
   public ServiceCall<Optional<UUID>, NotUsed, Source<Likes, NotUsed>> counts() {
-    return (offset, request) ->
-        CompletableFuture.completedFuture(persistentEntities.eventStream(LikeEventTag.INSTANCE, offset)
-            .mapAsync(2, event ->
-              persistentEntities.refFor(LikeEntity.class, event.first().chirpId())
-                .ask(new LikeCommand.GetLikes())
-                .thenApply(likers -> new Likes(event.first().chirpId(), likers.size(), event.second()))
-        ));
+    return (offset, request) -> {
+      throw new UnsupportedOperationException();
+    };
+
   }
 
   private PersistentEntityRef<LikeCommand> likeEntityRef(ChirpId chirpId) {
