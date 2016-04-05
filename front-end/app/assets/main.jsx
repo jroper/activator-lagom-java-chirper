@@ -20,6 +20,10 @@ function sendJson(params) {
     return ajax(params);
 }
 
+function currentUser() {
+    return JSON.parse(localStorage.user);
+}
+
 /**
  * Like $.ajax, but adds the user token to the header so its authenticated.
  */
@@ -158,6 +162,24 @@ function createUserStream(userId) {
 function createActivityStream(userId) {
     return createStream("/api/activity/" + userId + "/live");
 }
+
+var ActivityStream = React.createClass({
+    getInitialState: function() {
+        return {users: {}};
+    },
+    render: function() {
+        return (
+            <ContentLayout subtitle="Chirps feed">
+                <Section>
+                    <div className="small-12 columns">
+                        <ChirpForm />
+                        <ChirpStream stream={createActivityStream(localStorage.userId)} users={this.state.users} />
+                    </div>
+                </Section>
+            </ContentLayout>
+        );
+    }
+});
 
 function createStream(path, onopen) {
     return {
@@ -331,24 +353,6 @@ var AddFriendPage = React.createClass({
                             {error}
                             <input type="submit" value="Add Friend" />
                         </form>
-                    </div>
-                </Section>
-            </ContentLayout>
-        );
-    }
-});
-
-var ActivityStream = React.createClass({
-    getInitialState: function() {
-        return {users: {}};
-    },
-    render: function() {
-        return (
-            <ContentLayout subtitle="Chirps feed">
-                <Section>
-                    <div className="small-12 columns">
-                        <ChirpForm />
-                        <ChirpStream stream={createActivityStream(localStorage.userId)} users={this.state.users} />
                     </div>
                 </Section>
             </ContentLayout>
@@ -609,6 +613,7 @@ var App = React.createClass({
         if (localStorage.userId) {
             getUser(localStorage.userId).then(function (user) {
                 if (user) {
+                    localStorage.user = JSON.stringify(user);
                     this.setState({loginChecked: true, user: user});
                 } else {
                     localStorage.removeItem("userId");
@@ -620,7 +625,7 @@ var App = React.createClass({
         }
     },
     handleLogin: function(user) {
-        localStorage.user = user;
+        localStorage.user = JSON.stringify(user);
         this.setState({user: user});
     },
     logout: function(e) {
